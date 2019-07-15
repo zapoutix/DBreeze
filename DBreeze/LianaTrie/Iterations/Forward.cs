@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using DBreeze.Utils;
@@ -1442,7 +1443,177 @@ namespace DBreeze.LianaTrie.Iterations
             }
         }
 
-        
+        /// <summary>
+        /// IterateForwardFromTo
+        /// </summary>
+        /// <param name="initKey"></param>
+        /// <param name="stopKey"></param>
+        /// <param name="inclStartKey"></param>
+        /// <param name="inclStopKey"></param>
+        /// <param name="useCache"></param>
+        /// <returns></returns>
+        public IEnumerable<LTrieRow> IterateForwardMaskFromTo(byte[] initKey, byte[] stopKey, bool inclStartKey, bool inclStopKey, bool useCache)
+        {
+
+            LTrieGenerationNode gn = null;
+
+            initialKey = initKey;
+            endKey = stopKey;
+            includeStartKey = inclStartKey;
+            includeStopKey = inclStopKey;
+
+            LTrieGenerationMap _generationMap = new LTrieGenerationMap();
+
+            //if (_generationMap.Count() == 0)
+            //{
+            //Loading it from Link TO ZERO Pointer
+            gn = new LTrieGenerationNode(this._root);
+            gn.Pointer = this._root.LinkToZeroNode;
+            //gn.Value=0; - default
+            _generationMap.Add(0, gn);
+
+            gn.ReadSelf(useCache, _generationMap.GenerateMapNodesValuesUpToIndex(0));
+            //}
+
+            //ulong cnt = 0; //NEED ONLY FOR SKIP
+
+            byte[] generationMapLine = new byte[1] { 0 };
+            byte[] gml = null;
+            LTrieGenerationNode gn1 = null;
+            byte[] key = null;
+            LTrieRow row = null;
+            long valueStartPtr = 0;
+            uint valueLength = 0;
+            byte[] xValue = null;
+
+            //Starting from first key. It's interesting inside of RecursiveYieldReturn to look Starting from value
+            //If intialKey index already bigger then its own length
+            //But for the first must be enough
+            foreach (var kd in gn.KidsInNode.GetKidsForward(initialKey[0]))
+            {
+                //Console.WriteLine("KN: {0}", key.ToBytesString(""));
+
+                //Kid can be value link or node link
+                //if value link we can count 1 up
+                if (kd.ValueKid || !kd.LinkToNode)
+                {
+                    if (ReturnKeyValuePair)
+                    {
+                        this._root.Tree.Cache.ReadKeyValue(useCache, kd.Ptr, out valueStartPtr, out valueLength, out key, out xValue);
+                    }
+                    else
+                    {
+                        key = this._root.Tree.Cache.ReadKey(useCache, kd.Ptr);
+                    }
+
+                    if (keyIsFound)
+                    {
+                        //We return this one key
+
+                        if ((includeStopKey) ? key.IfStringArraySmallerOrEqualThen(endKey) : key.IfStringArraySmallerThen(endKey))
+                        {
+                            row = new LTrieRow(this._root);
+                            if (ReturnKeyValuePair)
+                            {
+                                row.ValueStartPointer = valueStartPtr;
+                                row.ValueFullLength = valueLength;
+                                row.Value = xValue;
+                                row.ValueIsReadOut = true;
+                            }
+                            row.Key = key;
+                            row.LinkToValue = kd.Ptr;
+                            yield return row;
+                        }
+                        else
+                            break;
+                    }
+                    else
+                    {
+                        //Checking if key equals to the found element, bigger or smaller
+
+                        //Key is still not found 
+
+                        //Key size not same
+                        if (initialKey.Length != key.Length)
+                            continue;
+
+                        if (IsKeyIsBetweenMask(key, initialKey, stopKey, inclStartKey, inclStopKey))
+                        {
+                            row = new LTrieRow(this._root);
+                            if (ReturnKeyValuePair)
+                            {
+                                row.ValueStartPointer = valueStartPtr;
+                                row.ValueFullLength = valueLength;
+                                row.Value = xValue;
+                                row.ValueIsReadOut = true;
+                            }
+                            row.Key = key;
+                            row.LinkToValue = kd.Ptr;
+                            yield return row;
+                        }
+                    }
+                }
+                else
+                {
+                    if (!keyIsFound && initialKey[0] < kd.Val)
+                        keyIsFound = true;
+
+                    gn1 = new LTrieGenerationNode(this._root);
+                    gn1.Pointer = kd.Ptr;
+                    gn1.Value = (byte)kd.Val;
+                    //increasing map line must hold already 2 elements
+                    gml = generationMapLine.Concat(gn1.Value);
+                    gn1.ReadSelf(useCache, gml);
+                    //generationMapLine = generationMapLine.Concat(gn1.Value);
+                    //gn1.ReadSelf(useCache, generationMapLine);
+
+                    //foreach (var xr in ItFrwFromTo(gn1, generationMapLine, useCache))
+                    foreach (var xr in ItFrwFromTo(gn1, gml, useCache))
+                    {
+                        //cnt++;      //NEED ONLY FOR SKIP
+                        if (xr == null)
+                        {
+                            break;
+                        }
+                        yield return xr;
+                    }
+                }
+            }
+
+
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool IsKeyIsBetweenMask(byte[] key, byte[] initKey, byte[] stopKey, bool inclStartKey, bool inclStopKey)
+        {
+            for (int i = 0; i < initialKey.Length; i++)
+            {
+                var currentByte = key[i];
+
+                if (inclStartKey)
+                {
+                    if (currentByte < initialKey[i])
+                        return false;
+                }
+                else
+                {
+                    if (currentByte <= initialKey[i])
+                        return false;
+                }
+
+                if (inclStopKey)
+                {
+                    if (currentByte > stopKey[i])
+                        return false;
+                }
+                else
+                {
+                    if (currentByte >= stopKey[i])
+                        return false;
+                }
+            }
+            return true;        
+        }
+
         public IEnumerable<LTrieRow> IterateForwardStartsWith(byte[] initKey, bool useCache)
         {
             if (initKey.Length < 1)

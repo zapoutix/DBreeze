@@ -1445,7 +1445,25 @@ namespace DBreeze.LianaTrie
             }
         }
 
-        
+        public IEnumerable<LTrieRow> IterateForwardMaskFromTo(byte[] startKey, byte[] stopKey, bool includeStartKey, bool includeStopKey, ITrieRootNode readRootNode, bool ValuesLazyLoadingIsOn)
+        {
+            this.CheckTableIsOperable();
+
+            if (readRootNode == null)
+            {
+                //Flashing changes on the disk before commit. In case if the same thread uses the same root node
+                this.SaveGenerationMap();
+
+                Forward bw = new Forward(rn, ValuesLazyLoadingIsOn);
+                return bw.IterateForwardMaskFromTo(startKey, stopKey, includeStartKey, includeStopKey, false);
+
+            }
+            else
+            {
+                Forward bw = new Forward((LTrieRootNode)readRootNode, ValuesLazyLoadingIsOn);
+                return bw.IterateForwardMaskFromTo(startKey, stopKey, includeStartKey, includeStopKey, true);
+            }
+        }
 
 
         public IEnumerable<LTrieRow> IterateBackwardFromTo(byte[] startKey, byte[] stopKey, bool includeStartKey, bool includeStopKey, bool useCache, bool ValuesLazyLoadingIsOn)

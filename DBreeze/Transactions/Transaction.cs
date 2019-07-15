@@ -2236,6 +2236,47 @@ namespace DBreeze.Transactions
             }
         }
 
+        /// <summary>
+        /// Iterates table forward (ordered by key ascending). Starting from specified StartKey up to specified StopKey
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="tableName"></param>
+        /// <param name="startKey"></param>
+        /// <param name="includeStartKey">if start key will be included in the final result</param>
+        /// <param name="stopKey"></param>
+        /// <param name="includeStopKey">if stop key will be included in the final result</param>
+        /// <param name="AsReadVisibilityScope">Metters only for transactions where this table is in modification list
+        /// <para>(by SynchronizeTables or just insert, remove.. any key modification command).</para>
+        /// <para>If this parameter set to true, enumerator will return key/value,</para>
+        /// <para>like they were, before transaction started (and parallel reading threds can see it).</para>
+        /// </param>
+        /// <returns></returns>
+        public IEnumerable<Row<TKey, TValue>> SelectForwardMaskFromTo<TKey, TValue>(string tableName, TKey startKey, bool includeStartKey, TKey stopKey, bool includeStopKey, bool AsReadVisibilityScope = false)
+        {
+
+            ITrieRootNode readRoot = null;
+            LTrie table = GetReadTableFromBuffer(tableName, out readRoot, AsReadVisibilityScope);
+
+            if (table == null)
+            {
+                //do nothing end of iteration                
+            }
+            else
+            {
+                byte[] btStartKey = DataTypesConvertor.ConvertKey<TKey>(startKey);
+                byte[] btStopKey = DataTypesConvertor.ConvertKey<TKey>(stopKey);
+
+                //readRoot can be either filled or null
+                //if null it means that write root will be used (READ_SYNCHRO) if filled - this root will be used
+                foreach (var xrow in table.IterateForwardMaskFromTo(btStartKey, btStopKey, includeStartKey, includeStopKey, readRoot, this._valuesLazyLoadingIsOn))
+                {
+                    yield return new Row<TKey, TValue>(xrow, null, !(readRoot == null));
+                    //yield return new Row<TKey, TValue>(xrow._root, xrow.LinkToValue, xrow.Exists, xrow.Key, !(readRoot == null));
+                }
+            }
+        }
+
 
         /// <summary>
         /// Iterates table backward (ordered by key descending). Starting from specified StartKey down to specified StopKey.
